@@ -1,7 +1,8 @@
 #include "../include/GuelderConsoleLog.hpp"
 
+#include "../include/GuelderConsoleLogMacroses.hpp"
+
 #include <mutex>
-#include <iostream>
 #include <stdexcept>
 #include <string_view>
 #include <string>
@@ -11,6 +12,7 @@ namespace GuelderConsoleLog
 {
 	std::mutex Logger::logMutex;
     HANDLE Logger::console = GetStdHandle(STD_OUTPUT_HANDLE);
+    GE_DEFINE_LOG_CATEGORY(Core);
 	
 	void Logger::Throw(const std::string_view& message, const char* const fileName, const uint32_t& line)
     {

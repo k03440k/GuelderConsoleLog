@@ -1,10 +1,12 @@
+//The main file, which must be included in order to work
 #pragma once
+
+#include "GuelderConsoleLogMacroses.hpp"
 
 #include <Windows.h>
 
 #include <iostream>
 #include <mutex>
-#include <stdexcept>
 #include <string_view>
 #include <string>
 #include <sstream>
@@ -54,8 +56,8 @@ namespace GuelderConsoleLog
 namespace GuelderConsoleLog
 {
     template<typename... Attributes>
-    concept ConsoleColorAttributes = ((std::is_same_v<Attributes, ::GuelderConsoleLog::ConsoleForegroundColor> || ...)
-        || (std::is_same_v<Attributes, ::GuelderConsoleLog::ConsoleBackgroundColor> || ...));
+    concept ConsoleColorAttributes = ((std::is_same_v<Attributes, ConsoleForegroundColor> || ...)
+        || (std::is_same_v<Attributes, ConsoleBackgroundColor> || ...));
 
     enum class LogLevel : uint8_t
     {
@@ -68,22 +70,20 @@ namespace GuelderConsoleLog
     //TODO: ACCOMPLISH A NEW TEMPLATE PARAM
     /// <typeparam name="LoggingLevels">Which levels to handle</typeparam>
     /// <typeparam name="_enable">Whether it would work</typeparam>
-    /// <typeparam name="debugOnly">Whether it would work, when GE_DEBUG is off</typeparam>
-    template<LogLevel LoggingLevels, bool _enable, bool debugOnly = true>
+    template<LogLevel LoggingLevels, bool _enable>
     struct LoggingCategory {};//TODO: add colors support to this struct
 
-    template<LogLevel LoggingLevels, bool _debugOnly>
-    struct LoggingCategory<LoggingLevels, false, _debugOnly>
+    template<LogLevel LoggingLevels>
+    struct LoggingCategory<LoggingLevels, false>
     {
         constexpr LoggingCategory(const std::string_view& name, const bool writeTime = false) {}
 
         static constexpr LogLevel supportedLoggingLevels = LoggingLevels;
         static constexpr bool enable = false;
-        static constexpr bool debugOnly = _debugOnly;
     };
 
-    template<LogLevel LoggingLevels, bool _debugOnly>
-    struct LoggingCategory<LoggingLevels, true, _debugOnly>
+    template<LogLevel LoggingLevels>
+    struct LoggingCategory<LoggingLevels, true>
     {
         constexpr LoggingCategory(const std::string_view& name, const bool writeTime = false)
             : name(name), writeTime(writeTime) {}
@@ -100,7 +100,6 @@ namespace GuelderConsoleLog
         static constexpr LogLevel supportedLoggingLevels = LoggingLevels;
         const std::string_view name;
         static constexpr bool enable = true;
-        static constexpr bool debugOnly = _debugOnly;
         bool writeTime : 1;
     };
 
@@ -113,19 +112,19 @@ namespace GuelderConsoleLog
         Logger() = default;
         ~Logger() = default;
 
-        template<LogLevel LoggingLevels, bool debugOnly, typename... Args>
-        constexpr static void Log(const LoggingCategory<LoggingLevels, true, debugOnly>& category, const LogLevel& level, Args&&... args)
+        template<LogLevel LoggingLevels, typename... Args>
+        constexpr static void Log(const LoggingCategory<LoggingLevels, true>& category, const LogLevel& level, Args&&... args)
         {
             std::ostringstream oss;
             Format(oss, args...);
             const std::string message = oss.str();
-            WriteLog<LoggingLevels, debugOnly>(category, level, message);
+            WriteLog<LoggingLevels>(category, level, message);
         }
         /// <summary>
-        /// disable if enable == false
+        /// disabled if enable == false
         /// </summary>
-        template<LogLevel LoggingLevels, bool debugOnly, typename... Args>
-        constexpr static void Log(const LoggingCategory<LoggingLevels, false, debugOnly>& category, const LogLevel& level, Args&&... args) {}
+        template<LogLevel LoggingLevels, typename... Args>
+        constexpr static void Log(const LoggingCategory<LoggingLevels, false>& category, const LogLevel& level, Args&&... args) {}
 
         [[noreturn]]
         static void Throw(const std::string_view& message, const char* fileName, const uint32_t& line);
@@ -177,8 +176,8 @@ namespace GuelderConsoleLog
             Format(oss, args...);
         }
 
-        template<LogLevel LoggingLevels, bool debugOnly>
-        static void WriteLog(const LoggingCategory<LoggingLevels, true, debugOnly>& category, const LogLevel& level,
+        template<LogLevel LoggingLevels>
+        static void WriteLog(const LoggingCategory<LoggingLevels, true>& category, const LogLevel& level,
             const std::string_view& message)
         {
             if(category.writeTime)
@@ -228,11 +227,7 @@ namespace GuelderConsoleLog
 //the main logging category type
 namespace GuelderConsoleLog
 {
-    struct CoreLoggingCategory final : LoggingCategory<LogLevel::All, true, false>
-    {
-        CoreLoggingCategory() : LoggingCategory("Core", true) {}
-    };
-    const CoreLoggingCategory coreLoggingCategory;
+    GE_DECLARE_LOG_CATEGORY_EXTERN(Core, All, true, false, true);
 }
 
 //helper functions
@@ -242,24 +237,13 @@ namespace GuelderConsoleLog
     /// Prints into std::cout as custom type.
     /// Another form of Logger::Log(color, categoryName, ...)
     /// </summary>
-    template<LogLevel LoggingLevels, bool enable, bool debugOnly, typename... Args>
-    constexpr void Log(const LoggingCategory<LoggingLevels, enable, debugOnly>& category, const LogLevel& level, Args&&... info)
+    template<LogLevel LoggingLevels, bool enable, typename... Args>
+    constexpr void Log(const LoggingCategory<LoggingLevels, enable>& category, const LogLevel& level, Args&&... info)
     {
-        Logger::Log<LoggingLevels, debugOnly>(category, level, info...);//TODO: remade custom log with making macro which will declare new struct which will be inherited from IConsoleCategory with method GetName() (see in the screenshot)
+        Logger::Log<LoggingLevels>(category, level, info...);//TODO: remake custom log with making macro which will declare new struct which will be inherited from IConsoleCategory with method GetName() (see in the screenshot)
     }
 
-    /// <summary>
-    /// Prints into std::cout as custom type.
-    /// Another form of Logger::Log(color, categoryName, ...)
-    /// Special version for GE_LOG
-    /// </summary>
-    template<bool __enable, LogLevel LoggingLevels, bool enable, bool debugOnly, typename... Args>
-    constexpr void Log(const LoggingCategory<LoggingLevels, enable, debugOnly>& category, const LogLevel& level, Args&&... info)
-    {
-        if constexpr(!__enable)
-            return;
-        Logger::Log<LoggingLevels, debugOnly>(category, level, info...);//TODO: remade custom log with making macro which will declare new struct which will be inherited from IConsoleCategory with method GetName() (see in the screenshot)
-    }
+    //Added those just because it writes simpler rather than GE_LOG(Core, Infom ...)
 
     /// <summary>
     /// Prints into std::cout as info.
@@ -268,7 +252,7 @@ namespace GuelderConsoleLog
     template<typename... Args>
     constexpr void LogInfo(Args&&... info)
     {
-        Logger::Log<CoreLoggingCategory::supportedLoggingLevels>(coreLoggingCategory, LogLevel::Info, info...);
+        GE_LOG(Core, Info, info...);
     }
 
     /// <summary>
@@ -278,7 +262,7 @@ namespace GuelderConsoleLog
     template<typename ...Args>
     constexpr void LogWarning(Args&&... info)
     {
-        Logger::Log<CoreLoggingCategory::supportedLoggingLevels>(coreLoggingCategory, LogLevel::Warning, info...);
+        GE_LOG(Core, Warning, info...);
     }
 
     /// <summary>
@@ -288,6 +272,6 @@ namespace GuelderConsoleLog
     template<typename ...Args>
     constexpr void LogError(Args&&... info)
     {
-        Logger::Log<CoreLoggingCategory::supportedLoggingLevels>(coreLoggingCategory, LogLevel::Error, info...);
+        GE_LOG(Core, Error, info...);
     }
 }

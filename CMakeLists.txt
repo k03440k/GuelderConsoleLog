@@ -8,5 +8,6 @@ include_directories("${PROJECT_SOURCE_DIR}/include")
 
 add_library(GuelderConsoleLog STATIC
 	"include/GuelderConsoleLog.hpp"
+	"include/GuelderConsoleLogMacroses.hpp"
 	"src/GuelderConsoleLog.cpp"
 )
