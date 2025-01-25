@@ -109,8 +109,8 @@ namespace GuelderConsoleLog
     class Logger
     {
     public:
-        Logger() = default;
-        ~Logger() = default;
+        Logger() = delete;
+        ~Logger() = delete;
 
         template<LogLevel LoggingLevels, typename... Args>
         constexpr static void Log(const LoggingCategory<LoggingLevels, true>& category, const LogLevel& level, Args&&... args)
