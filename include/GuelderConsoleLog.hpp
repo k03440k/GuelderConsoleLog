@@ -180,6 +180,8 @@ namespace GuelderConsoleLog
         static void WriteLog(const LoggingCategory<LoggingLevels, true>& category, const LogLevel& level,
             const std::string_view& message)
         {
+            std::lock_guard lock(logMutex);
+
             if(category.writeTime)
             {
                 const auto t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
@@ -188,8 +190,6 @@ namespace GuelderConsoleLog
 
                 std::cout << std::put_time(&localTime, "%H:%M:%S") << ' '; // print timestamp
             }
-
-            std::lock_guard lock(logMutex);
 
             std::cout << category.name << ": ";
 
