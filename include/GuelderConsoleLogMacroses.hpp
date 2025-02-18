@@ -10,6 +10,10 @@
 #endif
 #endif
 
+#ifndef GE_LOCALE
+#define GE_LOCALE ""
+#endif
+
 #define GE_FUNC_NAME __func__
 
 #if defined(_MSC_VER)
