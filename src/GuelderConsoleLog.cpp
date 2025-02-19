@@ -16,5 +16,8 @@ namespace GuelderConsoleLog
     Logger::LoggerHelper::LoggerHelper()
     {
         std::setlocale(LC_CTYPE, GE_LOCALE);
+#ifdef WIN32
+        SetConsoleOutputCP(CP_UTF8);
+#endif
     }
 }
