@@ -1,9 +1,10 @@
-//The main file, which must be included in order to work
 #pragma once
 
 #include "GuelderConsoleLogMacroses.hpp"
 
+#ifdef WIN32
 #include <Windows.h>
+#endif
 
 #include <iostream>
 #include <mutex>
@@ -13,14 +14,15 @@
 #include <chrono>
 #include <type_traits>
 #include <functional>
-#include <stdexcept>
 
 //enums of color attributes
 namespace GuelderConsoleLog
 {
-    enum class ConsoleForegroundColor : WORD
+    enum class ConsoleForegroundColor : uint16_t
     {
-        Black = 0,
+        Black = 0
+#ifdef WIN32
+        ,
         Blue = FOREGROUND_BLUE,
         Green = FOREGROUND_GREEN,
         Cyan = FOREGROUND_GREEN | FOREGROUND_BLUE,
@@ -36,11 +38,14 @@ namespace GuelderConsoleLog
         BrightMagenta = FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_INTENSITY,
         BrightYellow = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY,
         BrightWhite = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY
+#endif
     };
 
-    enum class ConsoleBackgroundColor : WORD
+    enum class ConsoleBackgroundColor : uint16_t
     {
-        Black = 0,
+        Black = 0
+#ifdef WIN32
+        ,
         Blue = BACKGROUND_BLUE,
         Green = BACKGROUND_GREEN,
         Cyan = BACKGROUND_GREEN | BACKGROUND_BLUE,
@@ -48,28 +53,46 @@ namespace GuelderConsoleLog
         Magenta = BACKGROUND_RED | BACKGROUND_BLUE,
         Yellow = BACKGROUND_RED | BACKGROUND_GREEN,
         White = BACKGROUND_RED | BACKGROUND_GREEN | BACKGROUND_BLUE
+#endif
     };
 }
 
+//strings converting
 namespace GuelderConsoleLog
 {
+    /**
+     * \brief WARNING: This func only works properly with windows, because I don't give a fuck about Linux or MacOS.
+     */
     inline std::wstring StringToWString(const std::string_view& str)
     {
-        int neededSize = MultiByteToWideChar(CP_UTF8, 0, str.data(), -1, nullptr, 0);
+#ifdef WIN32
+        const int neededSize = MultiByteToWideChar(CP_UTF8, 0, str.data(), - 1, nullptr, 0);
         std::wstring wString(neededSize, L'\0');
         MultiByteToWideChar(CP_UTF8, 0, str.data(), -1, wString.data(), neededSize);
+#else
+        std::wstring wString{};
+#endif
 
         return wString;
     }
-    inline std::string WStringToString(const std::wstring_view& wstr)
+    /**
+     * \brief WARNING: This func only works properly with windows, because I don't give a fuck about Linux or MacOS.
+     */
+    inline std::string WStringToString(const std::wstring_view& wStr)
     {
-        int neededSize = WideCharToMultiByte(CP_UTF8, 0, wstr.data(), wstr.size(), nullptr, 0, nullptr, nullptr);
+#ifdef WIN32
+        const int neededSize = WideCharToMultiByte(CP_UTF8, 0, wStr.data(), wStr.size(), nullptr, 0, nullptr, nullptr);
         std::string string(neededSize, L'\0');
-        WideCharToMultiByte(CP_UTF8, 0, wstr.data(), wstr.size(), string.data(), neededSize, nullptr, nullptr);
+        WideCharToMultiByte(CP_UTF8, 0, wStr.data(), wStr.size(), string.data(), neededSize, nullptr, nullptr);
+#else
+        std::string string;
+#endif
 
         return string;
     }
 }
+
+//concepts
 namespace GuelderConsoleLog
 {
     template<typename T>
@@ -84,7 +107,7 @@ namespace GuelderConsoleLog
         concept IsThereAtLeastOneWideChar = (SameRawType<typename RawType<Args>::value_type, wchar_t> || ...) || (SameRawType<RawType<Args>, wchar_t> || ...);
 
         template<typename String, typename... Strings>
-        concept IsAtLeastOneSame = (SameRawType<RawType<String>, Strings> || ...);
+        concept IsAtLeastOneSameRaw = (SameRawType<RawType<String>, Strings> || ...);
 
         template<typename Char, typename T>
         concept HasOutputOperator = (requires(std::basic_ostream<Char>&os, const T & t) { os << t; });
@@ -99,9 +122,59 @@ namespace GuelderConsoleLog
         concept STDOut = STDCout<T> || STDWout<T>;
 
         template<typename... Attributes>
-        concept ConsoleColorAttributes = (std::is_same_v<Attributes, ConsoleForegroundColor> || ...) || (std::is_same_v<Attributes, ConsoleBackgroundColor> || ...);
+        concept ConsoleColorAttributes = (std::is_same_v<RawType<Attributes>, ConsoleForegroundColor> || ...) || (std::is_same_v<RawType<Attributes>, ConsoleBackgroundColor> || ...) || (std::is_same_v<RawType<Attributes>, uint16_t> || ...);
+
+        template<typename T>
+        concept IsException = (std::is_same_v<T, std::exception> || std::is_base_of_v<std::exception, T>) && (std::is_constructible_v<T, const std::string&> || std::is_constructible_v<T, const char*>);
     }
 }
+
+//colors stuff
+namespace GuelderConsoleLog
+{
+    template<Concepts::ConsoleColorAttributes Rhs, Concepts::ConsoleColorAttributes Lhs>
+    constexpr uint16_t operator|(Rhs&& lhs, Lhs&& rhs)
+    {
+        return static_cast<std::underlying_type_t<ConsoleForegroundColor>>(lhs) | static_cast<std::underlying_type_t<ConsoleForegroundColor>>(rhs);
+    }
+
+    /**
+     * \brief Struct, which is used to set colors of a log message
+     * \tparam _categoryColor The color, which is used with logging category name.
+     * \tparam _messageColor The color, which is used with the actual message.
+     */
+    template<uint16_t _categoryColor, uint16_t _messageColor>
+    struct LoggingLevelsCategoryColor final
+    {
+        static constexpr uint16_t categoryColor = _categoryColor;
+        static constexpr uint16_t messageColor = _messageColor;
+    };
+
+    /**
+     * \brief Struct, which represents a set of LoggingLevelsCategoryColor for Info, Warning and Error logging categories.
+     */
+    template<LoggingLevelsCategoryColor _info, LoggingLevelsCategoryColor _warning, LoggingLevelsCategoryColor _error>
+    struct LoggingLevelsCategoryColors final
+    {
+        static constexpr LoggingLevelsCategoryColor info = _info;
+        static constexpr LoggingLevelsCategoryColor warning = _warning;
+        static constexpr LoggingLevelsCategoryColor error = _error;
+    };
+
+    //aliases
+    namespace Colors
+    {
+        using Background = ConsoleBackgroundColor;
+        using Text = ConsoleForegroundColor;
+
+        template<uint16_t _categoryColor, uint16_t _messageColor>
+        using CategoryColor = LoggingLevelsCategoryColor<_categoryColor, _messageColor>;
+
+        template<CategoryColor _info, CategoryColor _warning, CategoryColor _error>
+        using CategoryColors = LoggingLevelsCategoryColors<_info, _warning, _error>;
+    }
+}
+
 namespace GuelderConsoleLog
 {
     enum class LogLevel : uint8_t
@@ -112,26 +185,30 @@ namespace GuelderConsoleLog
         All = Info | Warning | Error
     };
 
-    template<LogLevel LoggingLevels, bool _enable>
+    template<LogLevel loggingLevels, bool _enable, bool _writeTime, Colors::CategoryColors _levelsColors>
     struct LoggingCategory {};
 
-    template<LogLevel LoggingLevels>
-    struct LoggingCategory<LoggingLevels, false>
+    template<LogLevel loggingLevels, bool _writeTime, Colors::CategoryColors _levelsColors>
+    struct LoggingCategory<loggingLevels, false, _writeTime, _levelsColors>
     {
-        constexpr LoggingCategory(const std::string_view& name, const bool writeTime = false) {}
+        constexpr LoggingCategory(const std::string_view& name) {}
 
-        static constexpr LogLevel supportedLoggingLevels = LoggingLevels;
+        static constexpr LogLevel supportedLoggingLevels = loggingLevels;
         static constexpr bool enable = false;
+        static constexpr bool writeTime = _writeTime;
+
+        static constexpr Colors::CategoryColors levelsColors = _levelsColors;
     };
 
-    template<LogLevel LoggingLevels>
-    struct LoggingCategory<LoggingLevels, true>
+    template<LogLevel loggingLevels, bool _writeTime, Colors::CategoryColors _levelsColors>
+    struct LoggingCategory<loggingLevels, true, _writeTime, _levelsColors>
     {
-        constexpr LoggingCategory(const std::string_view& name, const bool writeTime = false)
-            : name(name), writeTime(writeTime) {}
+        constexpr LoggingCategory(const std::string_view& name)
+            : name(name) {}
         virtual ~LoggingCategory() = default;
 
-        constexpr bool CanSupportLogLevel(const LogLevel& level) const
+        [[nodiscard]]
+        static constexpr bool CanSupportLogLevel(const LogLevel& level)
         {
             if(supportedLoggingLevels == LogLevel::All)
                 return true;
@@ -139,56 +216,77 @@ namespace GuelderConsoleLog
                 static_cast<std::underlying_type_t<LogLevel>>(supportedLoggingLevels);
         }
 
-        static constexpr LogLevel supportedLoggingLevels = LoggingLevels;
-        const std::string_view name;
+        static constexpr LogLevel supportedLoggingLevels = loggingLevels;
+        std::string_view name;
         static constexpr bool enable = true;
-        bool writeTime : 1;
+        static constexpr bool writeTime = _writeTime;
+
+        static constexpr Colors::CategoryColors levelsColors = _levelsColors;
     };
 
-    class Logger
+    class Logger final
     {
     public:
         Logger() = delete;
         ~Logger() = delete;
 
-        template<LogLevel LoggingLevels, Concepts::STDOut... Args>
-        constexpr static void Log(const LoggingCategory<LoggingLevels, true>& category, const LogLevel& level, Args&&... args)
+        template<LogLevel loggingLevels, Colors::CategoryColors _levelsColors, bool writeTime, Concepts::STDOut... Args>
+        constexpr static void Log(const LoggingCategory<loggingLevels, true, writeTime, _levelsColors>& category, const LogLevel& level, Args&&... args)
         {
             if constexpr(Concepts::IsThereAtLeastOneWideChar<Args...>)
-                WriteLog<wchar_t, LoggingLevels>(category, level, Format(std::forward<Args>(args)...));
+                WriteLog<wchar_t, loggingLevels, writeTime, _levelsColors>(category, level, Format(std::forward<Args>(args)...));
             else
-                WriteLog<char, LoggingLevels>(category, level, Format(std::forward<Args>(args)...));
+                WriteLog<char, loggingLevels, writeTime, _levelsColors>(category, level, Format(std::forward<Args>(args)...));
         }
         /// <summary>
         /// disabled if enable == false
         /// </summary>
-        template<LogLevel LoggingLevels, Concepts::STDOut... Args>
-        constexpr static void Log(const LoggingCategory<LoggingLevels, false>& category, const LogLevel& level, Args&&... args) {}
+        template<LogLevel loggingLevels, Colors::CategoryColors _levelsColors, bool writeTime, Concepts::STDOut... Args>
+        constexpr static void Log(const LoggingCategory<loggingLevels, false, writeTime, _levelsColors>& category, const LogLevel& level, Args&&... args) {}
 
+        template<Concepts::IsException Exception = std::exception>
         [[noreturn]]
         static void Throw(const std::string_view& message, const char* const fileName, const uint32_t& line)
         {
-            throw(std::runtime_error(Format(message, '\n', "file: ", fileName, ", line: ", line)));
+            throw Exception(Format(message, '\n', "file: ", fileName, ", line: ", line).c_str());
         }
 
+        template<Concepts::IsException Exception = std::exception>
         [[noreturn]]
         static void Throw(const std::string_view& message)
         {
-            throw std::runtime_error(message.data());
+            throw Exception(message.data());
         }
 
-        /// <summary>
-        /// if input bool is false, then it will bring throw of runtime_error
-        /// </summary>
+        template<typename Exception = std::exception>
+        [[noreturn]]
+        static void Throw(Exception&& exception)
+        {
+            throw exception;
+        }
+
+        /**
+         * \brief if input bool is false, then it will bring throw of runtime_error
+         */
+        template<Concepts::IsException Exception = std::exception>
         static void Assert(const bool& condition, const std::string_view& message = "", const char* file = __FILE__, const uint32_t& line = __LINE__)
         {
             if(!condition)
-            {
-                Throw(message, file, line);
-                __debugbreak();
-            }
+                Throw<Exception>(message, file, line);
+        }
+        /**
+         * \brief if input bool is false, then it will bring throw of runtime_error
+         */
+        template<typename Exception = std::exception>
+        static void Assert(const bool& condition, Exception&& exception)
+        {
+            if(!condition)
+                Throw(std::forward<Exception>(exception));
         }
 
+        /**
+         * \return std::string or std::wstring, which were was made from all the input params.
+         */
         template<Concepts::STDOut... Args>
         constexpr static auto Format(Args&&... message)
         {
@@ -212,25 +310,16 @@ namespace GuelderConsoleLog
         }
 
     private:
-        struct LoggerHelper
+        struct LoggerHelper final
         {
-        public:
             LoggerHelper();
-
-            LoggerHelper(const LoggerHelper&) = delete;
-            LoggerHelper(LoggerHelper&&) = delete;
-
-            LoggerHelper& operator=(const LoggerHelper&) = delete;
-            LoggerHelper& operator=(LoggerHelper&&) = delete;
-
-        private:
-            static std::mutex logMutex;
-            static HANDLE console;
         };
 
     private:
         static std::mutex logMutex;
+#ifdef WIN32
         static HANDLE console;
+#endif
 
         //DON'T USE
         static const LoggerHelper loggerHelper;
@@ -246,27 +335,24 @@ namespace GuelderConsoleLog
         {
             return std::wcout;
         }
-
+        
+#ifdef WIN32
         template<Concepts::ConsoleColorAttributes... Attributes>
         constexpr static void SetConsoleColorAttributes(Attributes&&... attrs)
         {
-            SetConsoleTextAttribute(console, static_cast<WORD>((static_cast<WORD>(attrs) | ...)));
+            SetConsoleTextAttribute(console, static_cast<uint16_t>((static_cast<uint16_t>(attrs) | ...)));
         }
-        template<typename... Args, std::enable_if_t<((std::is_same_v<Args, WORD> || ...)), int> = 0>
-        constexpr static void SetConsoleColorAttributes(Args&&... attrs)
-        {
-            SetConsoleTextAttribute(console, (attrs | ...));
-        }
+#endif
 
-        template<Concepts::STDOut Char, LogLevel LoggingLevels>
-        static void WriteLog(const LoggingCategory<LoggingLevels, true>& category, const LogLevel& level, const std::basic_string_view<Char>& message)
+        template<Concepts::STDOut Char, LogLevel loggingLevels, bool writeTime, Colors::CategoryColors levelsColors>
+        constexpr static void WriteLog(const LoggingCategory<loggingLevels, true, writeTime, levelsColors>& category, const LogLevel& level, const std::basic_string_view<Char>& message)
         {
             auto& _stdcout = Out<char>();
             auto& _stdwout = Out<wchar_t>();
 
             std::lock_guard lock{ logMutex };
 
-            if(category.writeTime)
+            if constexpr(category.writeTime)
             {
                 const auto t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
                 tm localTime;
@@ -279,24 +365,33 @@ namespace GuelderConsoleLog
 
             using Background = ConsoleBackgroundColor;
             using Text = ConsoleForegroundColor;
+#ifdef WIN32
             if(level == LogLevel::Info && category.CanSupportLogLevel(LogLevel::Info))
             {
-                SetConsoleColorAttributes(Background::Cyan, Text::White);
+                SetConsoleColorAttributes(category.levelsColors.info.categoryColor);
                 _stdcout << "[INFO]";
-                SetConsoleColorAttributes(Text::Cyan, Background::Black);
+                SetConsoleColorAttributes(category.levelsColors.info.messageColor);
             }
             else if(level == LogLevel::Warning && category.CanSupportLogLevel(LogLevel::Warning))
             {
-                SetConsoleColorAttributes(Background::Yellow, Text::White);
+                SetConsoleColorAttributes(category.levelsColors.warning.categoryColor);
                 _stdcout << "[WARNING]";
-                SetConsoleColorAttributes(Text::Yellow, Background::Black);
+                SetConsoleColorAttributes(category.levelsColors.warning.messageColor);
             }
             else if(level == LogLevel::Error && category.CanSupportLogLevel(LogLevel::Error))
             {
-                SetConsoleColorAttributes(Background::Red, Text::White);
+                SetConsoleColorAttributes(category.levelsColors.error.categoryColor);
                 _stdcout << "[ERROR]";
-                SetConsoleColorAttributes(Text::Red, Background::Black);
+                SetConsoleColorAttributes(category.levelsColors.error.messageColor);
             }
+#else
+            if(level == LogLevel::Info && category.CanSupportLogLevel(LogLevel::Info))
+                _stdcout << "[INFO]";
+            else if(level == LogLevel::Warning && category.CanSupportLogLevel(LogLevel::Warning))
+                _stdcout << "[WARNING]";
+            else if(level == LogLevel::Error && category.CanSupportLogLevel(LogLevel::Error))
+                _stdcout << "[ERROR]";
+#endif
             else
                 Throw(Format("Logger::WriteLog: invalid logging level or \"", category.name, "\" doesn't support any logging level"), __FILE__, __LINE__);
 
@@ -309,7 +404,9 @@ namespace GuelderConsoleLog
 
             _stdcout << '\n';
 
+#ifdef WIN32
             SetConsoleColorAttributes(Text::White, Background::Black);
+#endif
         }
     };
 }
@@ -317,7 +414,19 @@ namespace GuelderConsoleLog
 //the main logging category type
 namespace GuelderConsoleLog
 {
-    GE_DECLARE_LOG_CATEGORY_EXTERN(Core, All, true, false, true);
+#ifdef WIN32
+    GE_DECLARE_LOG_LEVELS_COLORS_CONSTEXPR(Core,
+        Colors::Background::Cyan | Colors::Text::White, Colors::Background::Black | Colors::Text::Cyan,
+        Colors::Background::Yellow | Colors::Text::White, Colors::Background::Black | Colors::Text::Yellow,
+        Colors::Background::Red | Colors::Text::White, Colors::Background::Black | Colors::Text::Red);
+#else
+    GE_DECLARE_LOG_LEVELS_COLORS_CONSTEXPR(Core,
+        0, 0,
+        0, 0,
+        0, 0);
+#endif
+    
+    GE_DECLARE_LOG_CATEGORY_DEFAULT_COLORS_CONSTEXPR(Core, All, true, true, true);
 }
 
 //helper functions
@@ -327,10 +436,10 @@ namespace GuelderConsoleLog
     /// Prints into std::cout as custom type.
     /// Another form of Logger::Log(color, categoryName, ...)
     /// </summary>
-    template<LogLevel LoggingLevels, bool enable, Concepts::STDOut... Args>
-    constexpr void Log(const LoggingCategory<LoggingLevels, enable>& category, const LogLevel& level, Args&&... info)
+    template<LogLevel loggingLevels, bool enable, bool writeTime, Colors::CategoryColors _levelsColors, Concepts::STDOut... Args>
+    constexpr void Log(const LoggingCategory<loggingLevels, enable, writeTime, _levelsColors>& category, const LogLevel& level, Args&&... info)
     {
-        Logger::Log<LoggingLevels>(category, level, std::forward<Args>(info)...);
+        Logger::Log<loggingLevels, _levelsColors, writeTime>(category, level, std::forward<Args>(info)...);
     }
 
     //Added those just because it writes simpler rather than GE_LOG(Core, Info, ...)
@@ -349,11 +458,5 @@ namespace GuelderConsoleLog
     constexpr void LogError(Args&&... info)
     {
         GE_LOG(Core, Error, std::forward<Args>(info)...);
-    }
-
-    template<Concepts::STDOut... Args>
-    constexpr __forceinline auto Format(Args&&... message)
-    {
-        return Logger::Format(std::forward<Args>(message)...);
     }
 }
