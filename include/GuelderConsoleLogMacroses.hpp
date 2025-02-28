@@ -58,14 +58,14 @@
 #define GE_MAKE_FULL_ERROR_STRING(message) ::GuelderConsoleLog::Logger::Format(GE_FULL_FUNC_NAME, ": ", message, '\n', "file: ", __FILE__, ", line: ", __LINE__)
 
 #define GE_LOG_CATEGORY_TYPE(name) GE_CONCATENATE(name, LoggingCategory)
-#define GE_LOG_CATEGORY_VARIABLE(name) GE_CONCATENATE(g_, GE_CONCATENATE(name, LoggingCategoryVar))
+#define GE_LOG_CATEGORY_VARIABLE(name) GE_CONCATENATE(name, LoggingCategoryVar)
 
-#define GE_LOG_LEVELS_COLORS_VARIABLE(name) GE_CONCATENATE(g_, GE_CONCATENATE(name, LoggingLevelsColors))
+#define GE_LOG_LEVELS_COLORS_VARIABLE(name) GE_CONCATENATE(name, LoggingLevelsColors)
 
 
 #define GE_DECLARE_LOG_LEVELS_SAME_COLORS_CONSTEXPR(name, info, warning, error) GE_DECLARE_LOG_LEVELS_COLORS_CONSTEXPR(name, info, info, warning, warning, error, error)
 
-#define GE_DECLARE_LOG_CATEGORY_DEFAULT_COLORS_CONSTEXPR(name, loggingLevels, enable, debugOnly, writeTime) GE_DECLARE_LOG_CATEGORY_CONSTEXPR(name, loggingLevels, enable, debugOnly, writeTime, Core)
+#define GE_DECLARE_LOG_CATEGORY_DEFAULT_COLORS_CONSTEXPR(name, loggingLevels, enable, debugOnly, writeTime) GE_DECLARE_LOG_CATEGORY_CONSTEXPR(name, loggingLevels, enable, debugOnly, writeTime, ::GuelderConsoleLog::Core)
 
 
 #if defined(GE_DEBUG) && !defined(GE_NO_DEBUG)
